@@ -6,6 +6,7 @@ namespace App\Domain\Stocks\Jobs;
 
 use App\Domain\Stocks\Models\StockImport;
 use App\Domain\Stocks\Models\StockPrice;
+use App\Domain\Stocks\ValueObjects\Price;
 use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -43,10 +44,12 @@ final class ProcessStockImportChunk implements ShouldQueue
         }
 
         $payload = array_map(function (array $row): array {
+            $price = Price::fromString($row['price']);
+
             return [
                 'company_id' => $this->companyId,
                 'traded_on' => $row['traded_on'],
-                'price' => $row['price'],
+                'price' => $price->toMinor(),
             ];
         }, $this->rows);
 

@@ -6,6 +6,7 @@ use App\Domain\Stocks\Enums\StockImportStatus;
 use App\Domain\Stocks\Models\Company;
 use App\Domain\Stocks\Models\StockImport;
 use App\Domain\Stocks\Models\StockPrice;
+use App\Domain\Stocks\ValueObjects\Price;
 use Carbon\CarbonImmutable;
 
 it('relates stock prices to company', function (): void {
@@ -19,7 +20,9 @@ it('relates stock prices to company', function (): void {
         ]);
 
     expect($price->company->is($company))->toBeTrue()
-        ->and($company->stockPrices()->count())->toBe(1);
+        ->and($company->stockPrices()->count())->toBe(1)
+        ->and($price->price)->toBeInstanceOf(Price::class)
+        ->and($price->price->value())->toBe('123.450000');
 });
 
 it('casts stock import timestamps and status', function (): void {

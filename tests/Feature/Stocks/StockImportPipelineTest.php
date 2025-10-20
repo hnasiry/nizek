@@ -90,8 +90,8 @@ it('upserts chunk rows and advances counters', function (): void {
     ]);
 
     $rows = [
-        ['traded_on' => '2025-04-30', 'price' => '161.8400'],
-        ['traded_on' => '2025-04-29', 'price' => '163.7600'],
+        ['traded_on' => '2025-04-30', 'price' => '161.840000'],
+        ['traded_on' => '2025-04-29', 'price' => '163.760000'],
     ];
 
     new ProcessStockImportChunk($import->id, $company->id, $rows)->handle();
@@ -102,20 +102,27 @@ it('upserts chunk rows and advances counters', function (): void {
 
     $prices = StockPrice::query()
         ->where('company_id', $company->id)
-        ->orderBy('traded_on', 'desc')
-        ->pluck('price', 'traded_on');
+        ->orderByDesc('traded_on')
+        ->get()
+        ->mapWithKeys(static fn (StockPrice $price): array => [
+            $price->traded_on->format('Y-m-d') => $price->price?->value(),
+        ]);
 
     expect($prices->all())->toBe([
-        '2025-04-30' => '161.8400',
-        '2025-04-29' => '163.7600',
+        '2025-04-30' => '161.840000',
+        '2025-04-29' => '163.760000',
     ]);
 
     // Upsert updates existing values.
-    $rows[0]['price'] = '200.0000';
+    $rows[0]['price'] = '200.000000';
 
     new ProcessStockImportChunk($import->id, $company->id, [$rows[0]])->handle();
 
+    $latest = StockPrice::query()
+        ->where('company_id', $company->id)
+        ->where('traded_on', '2025-04-30')
+        ->first();
+
     expect(StockPrice::query()->where('company_id', $company->id)->count())->toBe(2)
-        ->and(StockPrice::query()->where('company_id', $company->id)->where('traded_on', '2025-04-30')->value('price'))
-        ->toBe('200.0000');
+        ->and($latest?->price?->value())->toBe('200.000000');
 });

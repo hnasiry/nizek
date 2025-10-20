@@ -152,7 +152,7 @@ final class PrepareStockImport implements ShouldQueue
 
         return [
             'traded_on' => $date->toDateString(),
-            'price' => number_format($price, 4, '.', ''),
+            'price' => number_format($price, 6, '.', ''),
         ];
     }
 

@@ -23,7 +23,7 @@ final class StockPriceFactory extends Factory
         return [
             'company_id' => Company::factory(),
             'traded_on' => $this->faker->dateTimeBetween('-3 years', 'now')->format('Y-m-d'),
-            'price' => $this->faker->randomFloat(4, 10, 250),
+            'price' => number_format($this->faker->randomFloat(6, 10, 250), 6, '.', ''),
         ];
     }
 }
