@@ -8,9 +8,13 @@ use Livewire\Volt\Volt;
 
 Route::get('/', fn (): Illuminate\Contracts\View\View|\Illuminate\Contracts\View\Factory => view('welcome'))->name('home');
 
-Route::view('dashboard', 'dashboard')
+Volt::route('dashboard', 'dashboard.imports')
     ->middleware(['auth', 'verified'])
     ->name('dashboard');
+
+Volt::route('dashboard/companies', 'dashboard.companies')
+    ->middleware(['auth', 'verified'])
+    ->name('dashboard.companies');
 
 Route::middleware(['auth'])->group(function (): void {
     Route::redirect('settings', 'settings/profile');
