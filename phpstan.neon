@@ -10,3 +10,6 @@ parameters:
         - config
     level: 7
     tmpDir: /tmp/phpstan
+    treatPhpDocTypesAsCertain: false
+    stubFiles:
+        - %rootDir%/../../../stubs/enum.stub
