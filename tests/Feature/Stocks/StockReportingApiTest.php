@@ -28,6 +28,32 @@ it('requires authentication for reporting endpoints', function (): void {
     $performance->assertUnauthorized();
 });
 
+it('returns a not found response when the company is missing for comparison', function (): void {
+    $user = User::factory()->create();
+
+    Sanctum::actingAs($user);
+
+    $response = $this->getJson('/api/companies/999999/stock-prices/comparison?from=2025-04-29&to=2025-04-30');
+
+    $response->assertNotFound()
+        ->assertJson([
+            'message' => 'Company not found.',
+        ]);
+});
+
+it('returns a not found response when the company is missing for performance', function (): void {
+    $user = User::factory()->create();
+
+    Sanctum::actingAs($user);
+
+    $response = $this->getJson('/api/companies/999999/stock-prices/performance');
+
+    $response->assertNotFound()
+        ->assertJson([
+            'message' => 'Company not found.',
+        ]);
+});
+
 it('returns stock price comparison between two dates', function (): void {
     $user = User::factory()->create();
     $company = Company::factory()->create();

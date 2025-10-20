@@ -45,3 +45,16 @@ it('validates ticker symbols for uniqueness and formatting', function (): void {
         ->call('createCompany')
         ->assertHasErrors(['symbol' => ['regex']]);
 });
+
+it('shows the company identifier in the listing', function (): void {
+    $this->actingAs(User::factory()->create());
+
+    $company = Company::factory()->create([
+        'name' => 'Acme Corp',
+        'symbol' => 'ACME',
+        'slug' => 'acme-corp',
+    ]);
+
+    Volt::test('dashboard.companies')
+        ->assertSee(sprintf('#%d', $company->id));
+});

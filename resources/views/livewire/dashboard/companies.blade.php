@@ -154,6 +154,7 @@ new #[Layout('components.layouts.app')] class extends Component {
             <table class="min-w-full divide-y divide-neutral-200 text-sm dark:divide-neutral-700">
                 <thead>
                     <tr class="text-left text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                        <th class="py-2">{{ __('ID') }}</th>
                         <th class="py-2">{{ __('Name') }}</th>
                         <th class="py-2">{{ __('Symbol') }}</th>
                         <th class="py-2">{{ __('Slug') }}</th>
@@ -165,6 +166,9 @@ new #[Layout('components.layouts.app')] class extends Component {
                 <tbody class="divide-y divide-neutral-200 dark:divide-neutral-800">
                     @forelse ($this->companies as $company)
                         <tr class="text-neutral-700 dark:text-neutral-200">
+                            <td class="py-3">
+                                <span class="text-xs font-mono text-neutral-500 dark:text-neutral-400">#{{ $company->id }}</span>
+                            </td>
                             <td class="py-3">
                                 <div class="font-medium">{{ $company->name }}</div>
                             </td>
@@ -186,7 +190,7 @@ new #[Layout('components.layouts.app')] class extends Component {
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="py-6 text-center text-neutral-500 dark:text-neutral-400">
+                            <td colspan="7" class="py-6 text-center text-neutral-500 dark:text-neutral-400">
                                 {{ __('No companies yet. Add your first company to enable imports.') }}
                             </td>
                         </tr>
