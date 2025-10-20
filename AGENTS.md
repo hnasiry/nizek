@@ -89,6 +89,7 @@ This application is a Laravel application and its main Laravel ecosystems packag
 ## PHP
 
 - Always use curly braces for control structures, even if it has one line.
+- Prefer `data_get()` instead of `Arr::get()` when retrieving nested values.
 
 ### Constructors
 - Use PHP 8 constructor property promotion in `__construct()`.
@@ -123,6 +124,9 @@ protected function isAccessible(User $user, ?string $path = null): bool
 - Use `php artisan make:` commands to create new files (i.e. migrations, controllers, models, etc.). You can list available Artisan commands using the `list-artisan-commands` tool.
 - If you're creating a generic PHP class, use `artisan make:class`.
 - Pass `--no-interaction` to all Artisan commands to ensure they work without user input. You should also pass the correct `--options` to ensure correct behavior.
+
+### Actions
+- Prefer explicit `handle` methods on action classes (e.g. call `QueueStockImport::handle()`), rather than relying on `__invoke`.
 
 ### Database
 - Always use proper Eloquent relationship methods with return type hints. Prefer relationship methods over raw queries or manual joins.
