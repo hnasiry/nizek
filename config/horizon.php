@@ -100,6 +100,7 @@ return [
 
     'waits' => [
         'redis:default' => 60,
+        'redis:imports' => 120,
     ],
 
     /*
@@ -212,6 +213,18 @@ return [
             'timeout' => 60,
             'nice' => 0,
         ],
+        'imports' => [
+            'connection' => 'redis',
+            'queue' => ['imports'],
+            'balance' => 'simple',
+            'maxProcesses' => 1,
+            'maxTime' => 0,
+            'maxJobs' => 0,
+            'memory' => 256,
+            'tries' => 3,
+            'timeout' => 180,
+            'nice' => 0,
+        ],
     ],
 
     'environments' => [
@@ -221,11 +234,19 @@ return [
                 'balanceMaxShift' => 1,
                 'balanceCooldown' => 3,
             ],
+            'imports' => [
+                'maxProcesses' => 5,
+                'tries' => 5,
+                'timeout' => 300,
+            ],
         ],
 
         'local' => [
             'supervisor-1' => [
                 'maxProcesses' => 3,
+            ],
+            'imports' => [
+                'maxProcesses' => 2,
             ],
         ],
     ],
