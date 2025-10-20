@@ -14,6 +14,11 @@ final class QueueStockImport
 {
     public function __invoke(StockImport $import): void
     {
+        $this->handle($import);
+    }
+
+    public function handle(StockImport $import): void
+    {
         if ($import->status->isTerminal()) {
             return;
         }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domain\Stocks\Jobs;
 
+use App\Domain\Stocks\Actions\MarkStockImportBatchCompleted;
+use App\Domain\Stocks\Actions\MarkStockImportBatchFailed;
 use App\Domain\Stocks\Enums\StockImportStatus;
 use App\Domain\Stocks\Models\StockImport;
 use Carbon\CarbonInterface;
@@ -14,7 +16,6 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Date;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\LazyCollection;
 use Spatie\SimpleExcel\SimpleExcelReader;
@@ -52,6 +53,8 @@ final class PrepareStockImport implements ShouldQueue
         $jobs = [];
         $totalRows = 0;
 
+        $failureHandler = new MarkStockImportBatchFailed($import->id);
+
         try {
             $path = Storage::disk($import->disk)->path($import->stored_path);
 
@@ -79,12 +82,7 @@ final class PrepareStockImport implements ShouldQueue
 
             $reader->close();
         } catch (Throwable $exception) {
-            $this->markFailed($import->id, $exception);
-
-            Log::error('Failed to read stock import file.', [
-                'import_id' => $import->id,
-                'exception' => $exception,
-            ]);
+            $failureHandler->dispatchFailed($exception, 'Failed to read stock import file.');
 
             throw $exception;
         }
@@ -100,20 +98,20 @@ final class PrepareStockImport implements ShouldQueue
             return;
         }
 
-        $pendingBatch = Bus::batch($jobs)
-            ->name(sprintf('stock-import:%s', $import->id))
-            ->then(fn () => $this->markCompleted($import->id))
-            ->catch(function (Throwable $exception) use ($import): void {
-                $this->markFailed($import->id, $exception);
+        $completionHandler = new MarkStockImportBatchCompleted($import->id);
 
-                Log::error('Stock import batch failed.', [
-                    'import_id' => $import->id,
-                    'exception' => $exception,
-                ]);
-            })
-            ->onQueue(config('stocks.import.queue'));
+        try {
+            $batch = Bus::batch($jobs)
+                ->name(sprintf('stock-import:%s', $import->id))
+                ->then($completionHandler)
+                ->catch($failureHandler)
+                ->onQueue(config('stocks.import.queue'))
+                ->dispatch();
+        } catch (Throwable $exception) {
+            $failureHandler->dispatchFailed($exception, 'Unable to dispatch stock import batch.');
 
-        $batch = $pendingBatch->dispatch();
+            throw $exception;
+        }
 
         $import->forceFill([
             'batch_id' => $batch->id,
@@ -137,7 +135,6 @@ final class PrepareStockImport implements ShouldQueue
     {
         $dateValue = data_get($row, 'date');
         $priceValue = data_get($row, 'stock_price') ?? data_get($row, 'price');
-
 
         if (empty($dateValue) || empty($priceValue)) {
             return null;
@@ -177,36 +174,5 @@ final class PrepareStockImport implements ShouldQueue
         $price = filter_var($value, FILTER_VALIDATE_FLOAT);
 
         return $price !== false ? $price : null;
-    }
-
-    private function markCompleted(string $importId): void
-    {
-        /** @var StockImport|null $import */
-        $import = StockImport::query()->find($importId);
-
-        if ($import === null) {
-            return;
-        }
-
-        $import->forceFill([
-            'status' => StockImportStatus::Completed,
-            'completed_at' => Date::now(),
-        ])->save();
-    }
-
-    private function markFailed(string $importId, Throwable $exception): void
-    {
-        /** @var StockImport|null $import */
-        $import = StockImport::query()->find($importId);
-
-        if ($import === null) {
-            return;
-        }
-
-        $import->forceFill([
-            'status' => StockImportStatus::Failed,
-            'failed_at' => Date::now(),
-            'failure_reason' => $exception->getMessage(),
-        ])->save();
     }
 }

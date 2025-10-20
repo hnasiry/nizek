@@ -8,7 +8,6 @@ use App\Domain\Stocks\Enums\StockImportStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
 final class StockImport extends Model
 {
@@ -49,11 +48,6 @@ final class StockImport extends Model
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
-    }
-
-    public function stockPrices(): HasMany
-    {
-        return $this->hasMany(StockPrice::class);
     }
 
     /**

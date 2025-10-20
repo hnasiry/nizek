@@ -8,27 +8,18 @@ use App\Domain\Stocks\Models\StockImport;
 use App\Domain\Stocks\Models\StockPrice;
 use Carbon\CarbonImmutable;
 
-it('relates stock prices to company and import', function (): void {
+it('relates stock prices to company', function (): void {
     $company = Company::factory()->create();
-
-    $import = StockImport::factory()
-        ->for($company, 'company')
-        ->create([
-            'status' => StockImportStatus::Processing,
-        ]);
 
     $price = StockPrice::factory()
         ->for($company, 'company')
-        ->for($import, 'stockImport')
         ->create([
             'traded_on' => CarbonImmutable::now()->toDateString(),
             'price' => '123.4500',
         ]);
 
     expect($price->company->is($company))->toBeTrue()
-        ->and($price->stockImport->is($import))->toBeTrue()
-        ->and($company->stockPrices()->count())->toBe(1)
-        ->and($import->stockPrices()->count())->toBe(1);
+        ->and($company->stockPrices()->count())->toBe(1);
 });
 
 it('casts stock import timestamps and status', function (): void {

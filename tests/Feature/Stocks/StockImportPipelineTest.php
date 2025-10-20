@@ -27,7 +27,7 @@ it('queues stock import for asynchronous processing', function (): void {
             'disk' => 'local',
         ]);
 
-    app(QueueStockImport::class)($import);
+    app(QueueStockImport::class)->handle($import);
 
     $import->refresh();
 

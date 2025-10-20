@@ -12,12 +12,13 @@ final class StockPrice extends Model
 {
     use HasFactory;
 
+    public $timestamps = false;
+
     /**
      * @var array<int, string>
      */
     protected $fillable = [
         'company_id',
-        'stock_import_id',
         'traded_on',
         'price',
     ];
@@ -25,11 +26,6 @@ final class StockPrice extends Model
     public function company(): BelongsTo
     {
         return $this->belongsTo(Company::class);
-    }
-
-    public function stockImport(): BelongsTo
-    {
-        return $this->belongsTo(StockImport::class);
     }
 
     /**
