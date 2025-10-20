@@ -12,6 +12,11 @@ use Illuminate\Support\Facades\Config;
 use Laravel\Sanctum\Sanctum;
 use Spatie\SimpleExcel\SimpleExcelReader;
 
+beforeEach(function (): void {
+    Config::set('cache.default', 'array');
+    Cache::clear();
+});
+
 it('requires authentication for reporting endpoints', function (): void {
     $company = Company::factory()->create();
 
@@ -306,6 +311,7 @@ it('returns expected performance summary for dummy dataset', function (): void {
             ->and($actualChange)->toEqualWithDelta($expectedChange, 0.0003);
 
         expect($actualFormatted)->toEqualWithDelta($expectedFormatted, 0.05);
+        expect($entry['formatted'])->toBe($formatted);
         expect($entry['formatted'])->toContain('%');
     }
 });

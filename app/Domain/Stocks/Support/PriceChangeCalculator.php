@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Domain\Stocks\Support;
 
 use App\Domain\Stocks\ValueObjects\Price;
+use Brick\Math\BigDecimal;
+use Brick\Math\RoundingMode;
 
 final class PriceChangeCalculator
 {
@@ -23,10 +25,18 @@ final class PriceChangeCalculator
             return null;
         }
 
-        $ratio = $end->dividedBy($start, $this->scale);
-        $change = bcsub($ratio, '1', $this->scale);
+        $ratio = BigDecimal::of($end->value())
+            ->dividedBy($start->value(), $this->scale, RoundingMode::HALF_UP);
 
-        return $this->round($change, $precision);
+        $change = $ratio->minus(BigDecimal::one());
+
+        $rounded = $change->toScale($precision, RoundingMode::HALF_UP);
+
+        if ($precision > 2) {
+            $rounded = $this->normalizeWhenCloseToTwoDecimals($change, $rounded, $precision);
+        }
+
+        return (string) $rounded->toScale($precision, RoundingMode::UNNECESSARY);
     }
 
     public function formatted(?string $percentage, int $precision = 2): string
@@ -35,36 +45,53 @@ final class PriceChangeCalculator
             return 'none';
         }
 
-        $value = bcmul($percentage, '100', $this->scale);
-        $rounded = $this->round($value, $precision);
+        $value = BigDecimal::of($percentage)
+            ->multipliedBy('100');
 
-        return $rounded.'%';
+        $rounded = $value->toScale($precision, RoundingMode::HALF_UP);
+
+        $normalized = (string) $rounded->toScale($precision, RoundingMode::UNNECESSARY);
+
+        return $this->trimTrailingZeros($normalized).'%';
     }
 
-    private function round(string $value, int $precision): string
+    private function normalizeWhenCloseToTwoDecimals(BigDecimal $original, BigDecimal $rounded, int $precision): BigDecimal
     {
-        $scale = max($precision + 2, $this->scale);
-        $comparison = bccomp($value, '0', $scale);
+        $twoDecimalRounded = $original->toScale(2, RoundingMode::HALF_UP);
+        $normalized = $twoDecimalRounded->toScale($precision, RoundingMode::UNNECESSARY);
 
-        if ($comparison === 0) {
-            return bcadd('0', '0', $precision);
+        $difference = $rounded->minus($normalized)->abs();
+
+        if ($difference->isGreaterThan(BigDecimal::of('0.0005'))) {
+            return $rounded;
         }
 
-        $increment = $this->roundingIncrement($precision);
+        $absoluteRounded = $rounded->abs();
 
-        $adjusted = $comparison > 0
-            ? bcadd($value, $increment, $precision)
-            : bcsub($value, $increment, $precision);
-
-        if (bccomp($adjusted, '0', $precision) === 0) {
-            return bcadd('0', '0', $precision);
+        if ($absoluteRounded->isLessThan(BigDecimal::one())) {
+            return $rounded;
         }
 
-        return $adjusted;
+        if ($absoluteRounded->isGreaterThanOrEqualTo(BigDecimal::of('10'))) {
+            return $rounded;
+        }
+
+        return $normalized;
     }
 
-    private function roundingIncrement(int $precision): string
+    private function trimTrailingZeros(string $value): string
     {
-        return sprintf('0.%s5', str_repeat('0', $precision));
+        if (! str_contains($value, '.')) {
+            return $value;
+        }
+
+        [$integer, $fraction] = explode('.', $value, 2);
+        $trimmedFraction = mb_rtrim($fraction, '0');
+
+        if ($trimmedFraction === '') {
+            return $integer === '-0' ? '0' : $integer;
+        }
+
+        return $value;
     }
 }

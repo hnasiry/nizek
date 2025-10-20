@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Domain\Stocks\ValueObjects;
 
+use Brick\Math\BigDecimal;
+use Brick\Math\RoundingMode;
 use InvalidArgumentException;
 
 final class Price
@@ -13,7 +15,7 @@ final class Price
     private const int DEFAULT_ROUNDING_SCALE = self::SCALE;
 
     private function __construct(
-        private readonly string $amount,
+        private readonly BigDecimal $amount,
         private readonly int $scale,
     ) {}
 
@@ -33,14 +35,15 @@ final class Price
             throw new InvalidArgumentException('Minor units must be an integer value.');
         }
 
-        $decimal = bcdiv((string) $value, self::powerOfTen($scale), $scale);
+        $decimal = BigDecimal::of((string) $value)
+            ->dividedBy(self::powerOfTen($scale), $scale, RoundingMode::DOWN);
 
-        return new self($decimal, $scale);
+        return new self(self::normalize($decimal, $scale), $scale);
     }
 
     public function value(): string
     {
-        return $this->amount;
+        return (string) $this->amount->toScale($this->scale, RoundingMode::UNNECESSARY);
     }
 
     public function scale(): int
@@ -52,19 +55,26 @@ final class Price
     {
         $precision = $scale ?? $this->scale;
 
-        return bccomp($this->amount, '0', $precision) === 0;
+        return $this->amount
+            ->toScale($precision, RoundingMode::DOWN)
+            ->isZero();
     }
 
     public function dividedBy(self $divisor, int $scale = 10): string
     {
-        return bcdiv($this->amount, $divisor->amount, $scale);
+        return (string) $this->amount
+            ->dividedBy($divisor->amount, $scale, RoundingMode::DOWN);
     }
 
     public function toMinor(?int $scale = null): string
     {
         $precision = $scale ?? $this->scale;
 
-        return bcmul($this->amount, self::powerOfTen($precision), 0);
+        $scaled = $this->amount->toScale($precision, RoundingMode::DOWN);
+
+        return (string) $scaled
+            ->withPointMovedRight($precision)
+            ->toScale(0, RoundingMode::DOWN);
     }
 
     public function formatted(int $precision = 2): string
@@ -74,16 +84,23 @@ final class Price
 
     public function round(int $precision = self::DEFAULT_ROUNDING_SCALE): string
     {
-        return bcadd($this->amount, '0', $precision);
+        return (string) $this->amount
+            ->toScale($precision, RoundingMode::DOWN);
     }
 
-    private static function normalize(string $value, int $scale): string
+    private static function normalize(BigDecimal|string $value, int $scale): BigDecimal
     {
-        return bcadd($value, '0', $scale);
+        $decimal = $value instanceof BigDecimal ? $value : BigDecimal::of($value);
+
+        return $decimal->toScale($scale, RoundingMode::DOWN);
     }
 
-    private static function powerOfTen(int $scale): string
+    private static function powerOfTen(int $scale): BigDecimal
     {
-        return $scale === 0 ? '1' : '1'.str_repeat('0', $scale);
+        if ($scale === 0) {
+            return BigDecimal::one();
+        }
+
+        return BigDecimal::one()->withPointMovedRight($scale);
     }
 }
