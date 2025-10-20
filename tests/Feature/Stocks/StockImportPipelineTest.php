@@ -9,6 +9,7 @@ use App\Domain\Stocks\Jobs\ProcessStockImportChunk;
 use App\Domain\Stocks\Models\Company;
 use App\Domain\Stocks\Models\StockImport;
 use App\Domain\Stocks\Models\StockPrice;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Queue;
@@ -79,6 +80,8 @@ it('splits excel rows into chunk jobs', function (): void {
 });
 
 it('upserts chunk rows and advances counters', function (): void {
+    Date::setTestNow(CarbonImmutable::parse('2025-01-01 00:00:00'));
+
     $company = Company::factory()->create();
     $import = StockImport::factory()->create([
         'company_id' => $company->id,
@@ -94,11 +97,16 @@ it('upserts chunk rows and advances counters', function (): void {
         ['traded_on' => '2025-04-29', 'price' => '163.760000'],
     ];
 
+    Date::setTestNow(CarbonImmutable::parse('2025-01-02 08:00:00'));
+
     new ProcessStockImportChunk($import->id, $company->id, $rows)->handle();
 
     $import->refresh();
+    $company->refresh();
+    $firstTouch = Date::now();
 
     expect($import->processed_rows)->toBe(2);
+    expect($company->updated_at)->toEqual($firstTouch);
 
     $prices = StockPrice::query()
         ->where('company_id', $company->id)
@@ -116,7 +124,12 @@ it('upserts chunk rows and advances counters', function (): void {
     // Upsert updates existing values.
     $rows[0]['price'] = '200.000000';
 
+    Date::setTestNow(CarbonImmutable::parse('2025-01-03 09:30:00'));
+
     new ProcessStockImportChunk($import->id, $company->id, [$rows[0]])->handle();
+
+    $company->refresh();
+    $secondTouch = Date::now();
 
     $latest = StockPrice::query()
         ->where('company_id', $company->id)
@@ -124,5 +137,9 @@ it('upserts chunk rows and advances counters', function (): void {
         ->first();
 
     expect(StockPrice::query()->where('company_id', $company->id)->count())->toBe(2)
-        ->and($latest?->price?->value())->toBe('200.000000');
+        ->and($latest?->price?->value())->toBe('200.000000')
+        ->and($company->updated_at)->toEqual($secondTouch)
+        ->and($secondTouch)->not->toEqual($firstTouch);
+
+    Date::setTestNow();
 });

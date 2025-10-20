@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Domain\Stocks\Jobs;
 
+use App\Domain\Stocks\Models\Company;
 use App\Domain\Stocks\Models\StockImport;
 use App\Domain\Stocks\Models\StockPrice;
 use App\Domain\Stocks\ValueObjects\Price;
@@ -13,6 +14,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Date;
 
 final class ProcessStockImportChunk implements ShouldQueue
 {
@@ -58,6 +60,11 @@ final class ProcessStockImportChunk implements ShouldQueue
             uniqueBy: ['company_id', 'traded_on'],
             update: ['price']
         );
+
+        // Update company updated_at to invalidate cache key for stock performance summary
+        Company::query()
+            ->whereKey($this->companyId)
+            ->update(['updated_at' => Date::now()]);
 
         StockImport::query()->whereKey($this->importId)->increment('processed_rows', count($payload));
     }
