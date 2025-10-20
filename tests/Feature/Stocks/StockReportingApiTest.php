@@ -9,6 +9,7 @@ use App\Domain\Stocks\ValueObjects\Price;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Config;
+use Laravel\Sanctum\Sanctum;
 use Spatie\SimpleExcel\SimpleExcelReader;
 
 it('requires authentication for reporting endpoints', function (): void {
@@ -48,7 +49,9 @@ it('returns stock price comparison between two dates', function (): void {
     $expectedPercentage = number_format((161.8400 / 163.7600) - 1, 6, '.', '');
     $expectedFormatted = number_format(((float) $expectedPercentage) * 100, 2, '.', '').'%';
 
-    $response = $this->actingAs($user)->getJson(
+    Sanctum::actingAs($user);
+
+    $response = $this->getJson(
         sprintf('/api/companies/%d/stock-prices/comparison?from=2025-04-29&to=2025-04-30', $company->id),
     );
 
@@ -61,7 +64,9 @@ it('validates custom comparison request payload', function (): void {
     $user = User::factory()->create();
     $company = Company::factory()->create();
 
-    $response = $this->actingAs($user)->getJson(
+    Sanctum::actingAs($user);
+
+    $response = $this->getJson(
         sprintf('/api/companies/%d/stock-prices/comparison?from=2025-05-02&to=2025-05-01', $company->id),
     );
 
@@ -79,7 +84,9 @@ it('handles missing price data gracefully in comparison response', function (): 
         'price' => '161.8400',
     ]);
 
-    $response = $this->actingAs($user)->getJson(
+    Sanctum::actingAs($user);
+
+    $response = $this->getJson(
         sprintf('/api/companies/%d/stock-prices/comparison?from=2025-04-29&to=2025-04-30', $company->id),
     );
 
@@ -123,7 +130,9 @@ it('returns performance summary for the default periods', function (): void {
             ->exists(),
     )->toBeTrue();
 
-    $response = $this->actingAs($user)->getJson(
+    Sanctum::actingAs($user);
+
+    $response = $this->getJson(
         sprintf('/api/companies/%d/stock-prices/performance', $company->id),
     );
 
@@ -162,7 +171,9 @@ it('can filter performance periods via query parameter', function (): void {
         ],
     ]);
 
-    $response = $this->actingAs($user)->getJson(
+    Sanctum::actingAs($user);
+
+    $response = $this->getJson(
         sprintf('/api/companies/%d/stock-prices/performance?periods[]=1D&periods[]=1M', $company->id),
     );
 
@@ -182,7 +193,9 @@ it('marks periods without sufficient history', function (): void {
         'price' => '165.0000',
     ]);
 
-    $response = $this->actingAs($user)->getJson(
+    Sanctum::actingAs($user);
+
+    $response = $this->getJson(
         sprintf('/api/companies/%d/stock-prices/performance', $company->id),
     );
 
@@ -229,7 +242,9 @@ it('returns expected performance summary for dummy dataset', function (): void {
         ]);
     }
 
-    $response = $this->actingAs($user)->getJson(
+    Sanctum::actingAs($user);
+
+    $response = $this->getJson(
         sprintf('/api/companies/%d/stock-prices/performance', $company->id),
     );
 
