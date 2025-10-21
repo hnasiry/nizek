@@ -13,11 +13,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('stock_prices', function (Blueprint $table) {
+        Schema::create('stock_prices', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('company_id')->constrained()->cascadeOnDelete();
             $table->date('traded_on');
-            $table->decimal('price', 16, 4);
+            $table->bigInteger('price');
 
             $table->unique(['company_id', 'traded_on']);
             $table->index('traded_on');
