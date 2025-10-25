@@ -112,17 +112,6 @@ new #[Layout('components.layouts.app')] class extends Component {
 
         $this->dispatch('import-queued');
     }
-
-    public function statusColor(StockImportStatus $status): string
-    {
-        return match ($status) {
-            StockImportStatus::Completed => 'green',
-            StockImportStatus::Failed => 'red',
-            StockImportStatus::Processing => 'blue',
-            StockImportStatus::Queued => 'amber',
-            default => 'zinc',
-        };
-    }
 }; ?>
 
 <div class="flex flex-col gap-6">
@@ -236,7 +225,7 @@ new #[Layout('components.layouts.app')] class extends Component {
                                     <span class="break-all">{{ $import->original_filename }}</span>
                                 </td>
                                 <td class="py-3">
-                                    <flux:badge variant="solid" :color="$this->statusColor($import->status)">
+                                    <flux:badge variant="solid" :color="$import->status->color()">
                                         {{ Str::headline($import->status->value) }}
                                     </flux:badge>
                                 </td>

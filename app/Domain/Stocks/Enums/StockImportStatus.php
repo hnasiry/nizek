@@ -16,4 +16,15 @@ enum StockImportStatus: string
     {
         return in_array($this, [self::Completed, self::Failed], true);
     }
+
+    public function color(): string
+    {
+        return match ($this) {
+            self::Completed => 'green',
+            self::Failed => 'red',
+            self::Processing => 'blue',
+            self::Queued => 'amber',
+            default => 'zinc',
+        };
+    }
 }
