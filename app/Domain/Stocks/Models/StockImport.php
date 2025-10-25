@@ -39,7 +39,7 @@ final class StockImport extends Model
      * @var array<string, mixed>
      */
     protected $attributes = [
-        'status' => 'pending',
+        'status' => StockImportStatus::Pending,
         'disk' => 'local',
     ];
 
