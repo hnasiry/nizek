@@ -15,7 +15,7 @@ final class PriceChangeCalculator
         private int $zeroScale = Price::SCALE,
     ) {}
 
-    public function percentage(?Price $start, ?Price $end, int $precision = 6): ?string
+    public function percentage(?Price $start, ?Price $end, int $precision = 4): ?string
     {
         if ($start === null || $end === null) {
             return null;
@@ -25,18 +25,12 @@ final class PriceChangeCalculator
             return null;
         }
 
-        $ratio = BigDecimal::of($end->value())
-            ->dividedBy($start->value(), $this->scale, RoundingMode::HALF_UP);
+        $change = BigDecimal::of($end->value())
+            ->dividedBy($start->value(), $this->scale, RoundingMode::HALF_UP)
+            ->minus(BigDecimal::one())
+            ->toScale($precision, RoundingMode::HALF_UP);
 
-        $change = $ratio->minus(BigDecimal::one());
-
-        $rounded = $change->toScale($precision, RoundingMode::HALF_UP);
-
-        if ($precision > 2) {
-            $rounded = $this->normalizeWhenCloseToTwoDecimals($change, $rounded, $precision);
-        }
-
-        return (string) $rounded->toScale($precision, RoundingMode::UNNECESSARY);
+        return (string) $change;
     }
 
     public function formatted(?string $percentage, int $precision = 2): string
@@ -50,48 +44,6 @@ final class PriceChangeCalculator
 
         $rounded = $value->toScale($precision, RoundingMode::HALF_UP);
 
-        $normalized = (string) $rounded->toScale($precision, RoundingMode::UNNECESSARY);
-
-        return $this->trimTrailingZeros($normalized).'%';
-    }
-
-    private function normalizeWhenCloseToTwoDecimals(BigDecimal $original, BigDecimal $rounded, int $precision): BigDecimal
-    {
-        $twoDecimalRounded = $original->toScale(2, RoundingMode::HALF_UP);
-        $normalized = $twoDecimalRounded->toScale($precision, RoundingMode::UNNECESSARY);
-
-        $difference = $rounded->minus($normalized)->abs();
-
-        if ($difference->isGreaterThan(BigDecimal::of('0.0005'))) {
-            return $rounded;
-        }
-
-        $absoluteRounded = $rounded->abs();
-
-        if ($absoluteRounded->isLessThan(BigDecimal::one())) {
-            return $rounded;
-        }
-
-        if ($absoluteRounded->isGreaterThanOrEqualTo(BigDecimal::of('10'))) {
-            return $rounded;
-        }
-
-        return $normalized;
-    }
-
-    private function trimTrailingZeros(string $value): string
-    {
-        if (! str_contains($value, '.')) {
-            return $value;
-        }
-
-        [$integer, $fraction] = explode('.', $value, 2);
-        $trimmedFraction = mb_rtrim($fraction, '0');
-
-        if ($trimmedFraction === '') {
-            return $integer === '-0' ? '0' : $integer;
-        }
-
-        return $value;
+        return $rounded.'%';
     }
 }

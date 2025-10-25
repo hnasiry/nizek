@@ -77,7 +77,7 @@ it('returns stock price comparison between two dates', function (): void {
 
     expect(StockPrice::query()->count())->toBe(2);
 
-    $expectedPercentage = number_format((161.8400 / 163.7600) - 1, 6, '.', '');
+    $expectedPercentage = number_format((161.8400 / 163.7600) - 1, 4, '.', '');
     $expectedFormatted = number_format(((float) $expectedPercentage) * 100, 2, '.', '').'%';
 
     Sanctum::actingAs($user);
@@ -173,15 +173,15 @@ it('returns performance summary for the default periods', function (): void {
     $periods = $response->json('data.periods');
 
     expect($periods[0]['period'])->toBe(StockPerformancePeriod::OneDay->value)
-        ->and($periods[0]['change'])->toBe(number_format((165.0000 / 160.0000) - 1, 6, '.', ''))
+        ->and($periods[0]['change'])->toBe(number_format((165.0000 / 160.0000) - 1, 4, '.', ''))
         ->and($periods[0]['formatted'])->toBe(number_format(((165.0000 / 160.0000) - 1) * 100, 2, '.', '').'%');
 
     expect($periods[4]['period'])->toBe(StockPerformancePeriod::YearToDate->value)
-        ->and($periods[4]['change'])->toBe(number_format((165.0000 / 135.0000) - 1, 6, '.', ''))
+        ->and($periods[4]['change'])->toBe(number_format((165.0000 / 135.0000) - 1, 4, '.', ''))
         ->and($periods[4]['formatted'])->toBe(number_format(((165.0000 / 135.0000) - 1) * 100, 2, '.', '').'%');
 
     expect($periods[9]['period'])->toBe(StockPerformancePeriod::Max->value)
-        ->and($periods[9]['change'])->toBe(number_format((165.0000 / 40.0000) - 1, 6, '.', ''))
+        ->and($periods[9]['change'])->toBe(number_format((165.0000 / 40.0000) - 1, 4, '.', ''))
         ->and($periods[9]['formatted'])->toBe(number_format(((165.0000 / 40.0000) - 1) * 100, 2, '.', '').'%');
 });
 
@@ -282,16 +282,16 @@ it('returns expected performance summary for dummy dataset', function (): void {
     $response->assertOk();
 
     $expected = [
-        StockPerformancePeriod::OneDay->value => ['-0.011700', '-1.17%'],
-        StockPerformancePeriod::OneMonth->value => ['0.068300', '6.83%'],
-        StockPerformancePeriod::ThreeMonths->value => ['0.032900', '3.29%'],
-        StockPerformancePeriod::SixMonths->value => ['0.283300', '28.33%'],
-        StockPerformancePeriod::YearToDate->value => ['0.111500', '11.15%'],
-        StockPerformancePeriod::OneYear->value => ['0.301200', '30.12%'],
-        StockPerformancePeriod::ThreeYears->value => ['2.898100', '289.81%'],
-        StockPerformancePeriod::FiveYears->value => ['4.566800', '456.68%'],
-        StockPerformancePeriod::TenYears->value => ['9.840000', '984%'],
-        StockPerformancePeriod::Max->value => ['24.509600', '2450.96%'],
+        StockPerformancePeriod::OneDay->value => ['-0.0117', '-1.17%'],
+        StockPerformancePeriod::OneMonth->value => ['0.0683', '6.83%'],
+        StockPerformancePeriod::ThreeMonths->value => ['0.0329', '3.29%'],
+        StockPerformancePeriod::SixMonths->value => ['0.2833', '28.33%'],
+        StockPerformancePeriod::YearToDate->value => ['0.1115', '11.15%'],
+        StockPerformancePeriod::OneYear->value => ['0.3012', '30.12%'],
+        StockPerformancePeriod::ThreeYears->value => ['2.8981', '289.81%'],
+        StockPerformancePeriod::FiveYears->value => ['4.5668', '456.68%'],
+        StockPerformancePeriod::TenYears->value => ['9.8402', '984.02%'],
+        StockPerformancePeriod::Max->value => ['24.5096', '2450.96%'],
     ];
 
     $periods = collect($response->json('data.periods'));
@@ -306,12 +306,9 @@ it('returns expected performance summary for dummy dataset', function (): void {
         $expectedChange = (float) $change;
         $expectedFormatted = (float) $formatted;
 
-        expect($actualChange)->toBeGreaterThan(-1000)
-            ->and($actualChange)->toBeLessThan(1000)
-            ->and($actualChange)->toEqualWithDelta($expectedChange, 0.0003);
-
-        expect($actualFormatted)->toEqualWithDelta($expectedFormatted, 0.05);
-        expect($entry['formatted'])->toBe($formatted);
-        expect($entry['formatted'])->toContain('%');
+        expect($actualChange)->toBe($expectedChange)
+            ->and($actualFormatted)->toBe($expectedFormatted)
+            ->and($entry['formatted'])->toBe($formatted)
+            ->and($entry['formatted'])->toContain('%');
     }
 });
