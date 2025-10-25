@@ -11,6 +11,7 @@ use App\Domain\Stocks\Models\StockImport;
 use Carbon\CarbonInterface;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
@@ -18,6 +19,8 @@ use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\LazyCollection;
+use League\Flysystem\Local\LocalFilesystemAdapter;
+use RuntimeException;
 use Spatie\SimpleExcel\SimpleExcelReader;
 use Throwable;
 
@@ -50,15 +53,21 @@ final class PrepareStockImport implements ShouldQueue
             'failure_reason' => null,
         ])->save();
 
-        $jobs = [];
         $totalRows = 0;
 
         $failureHandler = new MarkStockImportBatchFailed($import->id);
+        $completionHandler = new MarkStockImportBatchCompleted($import->id);
+        $batch = null;
+
+        /** @var FilesystemAdapter $storage */
+        $storage = Storage::disk($import->disk);
+        $reader = null;
+        $temporaryHandle = null;
 
         try {
-            $path = Storage::disk($import->disk)->path($import->stored_path);
+            [$readerPath, $temporaryHandle] = $this->prepareReaderPath($storage, $import->stored_path);
 
-            $reader = SimpleExcelReader::create($path)
+            $reader = SimpleExcelReader::create($readerPath)
                 ->trimHeaderRow()
                 ->headersToSnakeCase();
 
@@ -66,18 +75,36 @@ final class PrepareStockImport implements ShouldQueue
 
             foreach ($reader->getRows()->chunk($chunkSize) as $chunk) {
                 $sanitized = $this->sanitizeChunk($chunk);
+                $rows = $sanitized->all();
 
-                if ($sanitized->isEmpty()) {
+                if ($rows === []) {
                     continue;
                 }
 
-                $jobs[] = new ProcessStockImportChunk(
+                $totalRows += count($rows);
+
+                $job = new ProcessStockImportChunk(
                     importId: $import->id,
                     companyId: $import->company_id,
-                    rows: $sanitized->all()
+                    rows: $rows
                 );
 
-                $totalRows += $sanitized->count();
+                try {
+                    if ($batch === null) {
+                        $batch = Bus::batch([$job])
+                            ->name(sprintf('stock-import:%s', $import->id))
+                            ->then($completionHandler)
+                            ->catch($failureHandler)
+                            ->onQueue(config('stocks.import.queue'))
+                            ->dispatch();
+                    } else {
+                        $batch = $batch->add([$job]);
+                    }
+                } catch (Throwable $exception) {
+                    $failureHandler->dispatchFailed($exception, 'Unable to dispatch stock import batch.');
+
+                    throw $exception;
+                }
             }
 
             $reader->close();
@@ -85,6 +112,12 @@ final class PrepareStockImport implements ShouldQueue
             $failureHandler->dispatchFailed($exception, 'Failed to read stock import file.');
 
             throw $exception;
+        } finally {
+            $reader?->close();
+
+            if (is_resource($temporaryHandle)) {
+                fclose($temporaryHandle);
+            }
         }
 
         if ($totalRows === 0) {
@@ -96,21 +129,6 @@ final class PrepareStockImport implements ShouldQueue
             ])->save();
 
             return;
-        }
-
-        $completionHandler = new MarkStockImportBatchCompleted($import->id);
-
-        try {
-            $batch = Bus::batch($jobs)
-                ->name(sprintf('stock-import:%s', $import->id))
-                ->then($completionHandler)
-                ->catch($failureHandler)
-                ->onQueue(config('stocks.import.queue'))
-                ->dispatch();
-        } catch (Throwable $exception) {
-            $failureHandler->dispatchFailed($exception, 'Unable to dispatch stock import batch.');
-
-            throw $exception;
         }
 
         $import->forceFill([
@@ -174,5 +192,52 @@ final class PrepareStockImport implements ShouldQueue
         $price = filter_var($value, FILTER_VALIDATE_FLOAT);
 
         return $price !== false ? $price : null;
+    }
+
+    /** @return array{0:string,1:resource|null} */
+    private function prepareReaderPath(FilesystemAdapter $storage, string $storedPath): array
+    {
+        if ($storage->getAdapter() instanceof LocalFilesystemAdapter) {
+            $localPath = $storage->path($storedPath);
+
+            if (! is_string($localPath) || $localPath === '') {
+                throw new RuntimeException('Unable to resolve local path for stock import file.');
+            }
+
+            return [$localPath, null];
+        }
+
+        $temporaryHandle = tmpfile();
+
+        if ($temporaryHandle === false) {
+            throw new RuntimeException('Unable to create temporary file for stock import.');
+        }
+
+        $meta = stream_get_meta_data($temporaryHandle);
+        $temporaryPath = $meta['uri'] ?? null;
+
+        if (! is_string($temporaryPath) || $temporaryPath === '') {
+            fclose($temporaryHandle);
+
+            throw new RuntimeException('Unable to discover temporary file path for stock import.');
+        }
+
+        $sourceStream = $storage->readStream($storedPath);
+
+        if (! is_resource($sourceStream)) {
+            fclose($temporaryHandle);
+
+            throw new RuntimeException('Unable to read stock import stream from storage.');
+        }
+
+        try {
+            if (stream_copy_to_stream($sourceStream, $temporaryHandle) === false) {
+                throw new RuntimeException('Unable to copy stock import stream to temporary file.');
+            }
+        } finally {
+            fclose($sourceStream);
+        }
+
+        return [$temporaryPath, $temporaryHandle];
     }
 }
