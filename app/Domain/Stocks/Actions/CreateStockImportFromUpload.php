@@ -6,17 +6,17 @@ namespace App\Domain\Stocks\Actions;
 
 use App\Domain\Stocks\Enums\StockImportStatus;
 use App\Domain\Stocks\Models\StockImport;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
-use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use RuntimeException;
 use Throwable;
 
 final class CreateStockImportFromUpload
 {
-    public function handle(int $companyId, TemporaryUploadedFile $file): StockImport
+    public function handle(int $companyId, UploadedFile $file): StockImport
     {
         $disk = config('stocks.import.disk', 'local');
         $importId = (string) Str::ulid();
