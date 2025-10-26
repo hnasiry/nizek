@@ -7,6 +7,7 @@ namespace App\Domain\Stocks\Actions;
 use App\Domain\Stocks\Enums\StockImportStatus;
 use App\Domain\Stocks\Jobs\PrepareStockImport;
 use App\Domain\Stocks\Models\StockImport;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Log;
 
@@ -24,6 +25,11 @@ final class QueueStockImport
         }
 
         $queue = config('stocks.import.queue');
+        $previousBatchId = $import->batch_id;
+
+        if (! empty($previousBatchId)) {
+            Bus::findBatch($previousBatchId)?->cancel();
+        }
 
         $import->forceFill([
             'status' => StockImportStatus::Queued,
