@@ -8,12 +8,16 @@ use App\Domain\Stocks\Enums\StockPerformancePeriod;
 use App\Domain\Stocks\Models\Company;
 use App\Domain\Stocks\Models\StockPrice;
 use App\Domain\Stocks\Support\PriceChangeCalculator;
+use App\Domain\Stocks\Support\StockPriceBaselineResolver;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Cache;
 
 final class BuildStockPerformanceSummary
 {
-    public function __construct(private PriceChangeCalculator $calculator) {}
+    public function __construct(
+        private PriceChangeCalculator $calculator,
+        private StockPriceBaselineResolver $baselineResolver,
+    ) {}
 
     /**
      * @param  list<StockPerformancePeriod>|null  $periods
@@ -29,33 +33,11 @@ final class BuildStockPerformanceSummary
         $cacheKey = $this->makeCacheKey($company, $asOf, $periods);
         $ttl = (int) config('stocks.reporting.cache_ttl', 300);
 
-        return Cache::remember($cacheKey, $ttl, function () use ($company, $asOf, $periods): array {
-            $latestPrice = $this->resolveLatestPrice($company, $asOf);
-
-            if ($latestPrice === null) {
-                return [
-                    'periods' => array_map(
-                        fn (StockPerformancePeriod $period): array => $this->emptyPeriod($period),
-                        $periods,
-                    ),
-                ];
-            }
-
-            /** @var CarbonImmutable $resolvedAsOf */
-            $resolvedAsOf = $latestPrice->traded_on;
-
-            return [
-                'periods' => array_map(
-                    fn (StockPerformancePeriod $period): array => $this->buildPeriodEntry(
-                        $company,
-                        $period,
-                        $resolvedAsOf,
-                        $latestPrice,
-                    ),
-                    $periods,
-                ),
-            ];
-        });
+        return Cache::remember(
+            $cacheKey,
+            $ttl,
+            fn (): array => $this->buildSummary($company, $asOf, $periods),
+        );
     }
 
     private function resolveLatestPrice(Company $company, ?CarbonImmutable $asOf): ?StockPrice
@@ -70,14 +52,60 @@ final class BuildStockPerformanceSummary
     }
 
     /**
+     * @param  list<StockPerformancePeriod>  $periods
      * @return array<string, mixed>
      */
-    private function emptyPeriod(StockPerformancePeriod $period): array
+    private function buildSummary(
+        Company $company,
+        ?CarbonImmutable $asOf,
+        array $periods,
+    ): array {
+        $latestPrice = $this->resolveLatestPrice($company, $asOf);
+
+        if ($latestPrice === null) {
+            return $this->emptySummary($periods);
+        }
+
+        /** @var CarbonImmutable $resolvedAsOf */
+        $resolvedAsOf = $latestPrice->traded_on;
+
+        return $this->summaryForLatestPrice($company, $periods, $resolvedAsOf, $latestPrice);
+    }
+
+    /**
+     * @param  list<StockPerformancePeriod>  $periods
+     * @return array<string, mixed>
+     */
+    private function emptySummary(array $periods): array
     {
         return [
-            'period' => $period->value,
-            'change' => null,
-            'formatted' => 'none',
+            'periods' => array_map(
+                fn (StockPerformancePeriod $period): array => $this->summarizePeriod($period, null),
+                $periods,
+            ),
+        ];
+    }
+
+    /**
+     * @param  list<StockPerformancePeriod>  $periods
+     * @return array<string, mixed>
+     */
+    private function summaryForLatestPrice(
+        Company $company,
+        array $periods,
+        CarbonImmutable $resolvedAsOf,
+        StockPrice $latestPrice,
+    ): array {
+        return [
+            'periods' => array_map(
+                fn (StockPerformancePeriod $period): array => $this->buildPeriodEntry(
+                    $company,
+                    $period,
+                    $resolvedAsOf,
+                    $latestPrice,
+                ),
+                $periods,
+            ),
         ];
     }
 
@@ -90,74 +118,30 @@ final class BuildStockPerformanceSummary
         CarbonImmutable $asOf,
         StockPrice $latestPrice,
     ): array {
-        $targetDate = $this->computeTargetDate($period, $asOf);
-        $baselinePrice = $this->resolveBaselinePrice($company, $period, $targetDate, $asOf);
+        $baselinePrice = $this->baselineResolver->resolve($company, $period, $asOf);
 
         if ($baselinePrice === null || $baselinePrice->traded_on->equalTo($latestPrice->traded_on)) {
-            return $this->emptyPeriod($period);
+            return $this->summarizePeriod($period, null);
         }
 
-        $percentage = $this->calculator->percentage($baselinePrice->price, $latestPrice->price);
+        $change = $this->calculator->percentage(
+            $baselinePrice->price,
+            $latestPrice->price,
+        );
 
+        return $this->summarizePeriod($period, $change);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function summarizePeriod(StockPerformancePeriod $period, ?string $change): array
+    {
         return [
             'period' => $period->value,
-            'change' => $percentage,
-            'formatted' => $this->calculator->formatted($percentage),
+            'change' => $change,
+            'formatted' => $this->calculator->formatted($change),
         ];
-    }
-
-    private function computeTargetDate(StockPerformancePeriod $period, CarbonImmutable $asOf): ?CarbonImmutable
-    {
-        return match ($period) {
-            StockPerformancePeriod::OneDay => $asOf->subDay(),
-            StockPerformancePeriod::OneMonth => $asOf->subMonth(),
-            StockPerformancePeriod::ThreeMonths => $asOf->subMonths(3),
-            StockPerformancePeriod::SixMonths => $asOf->subMonths(6),
-            StockPerformancePeriod::YearToDate => $asOf->startOfYear(),
-            StockPerformancePeriod::OneYear => $asOf->subYear(),
-            StockPerformancePeriod::ThreeYears => $asOf->subYears(3),
-            StockPerformancePeriod::FiveYears => $asOf->subYears(5),
-            StockPerformancePeriod::TenYears => $asOf->subYears(10),
-            StockPerformancePeriod::Max => null,
-        };
-    }
-
-    private function resolveBaselinePrice(
-        Company $company,
-        StockPerformancePeriod $period,
-        ?CarbonImmutable $targetDate,
-        CarbonImmutable $asOf,
-    ): ?StockPrice {
-        if ($period === StockPerformancePeriod::Max) {
-            return $company->stockPrices()
-                ->orderBy('traded_on')
-                ->first();
-        }
-
-        if ($targetDate === null) {
-            return null;
-        }
-
-        if ($period === StockPerformancePeriod::YearToDate) {
-            return $company->stockPrices()
-                ->whereBetween('traded_on', [$targetDate->toDateString(), $asOf->toDateString()])
-                ->orderBy('traded_on')
-                ->first();
-        }
-
-        $nextTradingDay = $company->stockPrices()
-            ->whereDate('traded_on', '>=', $targetDate)
-            ->orderBy('traded_on')
-            ->first();
-
-        if ($nextTradingDay !== null) {
-            return $nextTradingDay;
-        }
-
-        return $company->stockPrices()
-            ->whereDate('traded_on', '<=', $targetDate)
-            ->orderByDesc('traded_on')
-            ->first();
     }
 
     /**
