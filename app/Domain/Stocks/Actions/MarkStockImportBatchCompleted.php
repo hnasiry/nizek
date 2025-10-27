@@ -24,9 +24,25 @@ final class MarkStockImportBatchCompleted
             return;
         }
 
-        $import->forceFill([
+        $this->complete($import);
+    }
+
+    /**
+     * @param  array<string, mixed>  $extraAttributes
+     */
+    public function completeWithoutBatch(StockImport $import, array $extraAttributes = []): void
+    {
+        $this->complete($import, $extraAttributes);
+    }
+
+    /**
+     * @param  array<string, mixed>  $extraAttributes
+     */
+    private function complete(StockImport $import, array $extraAttributes = []): void
+    {
+        $import->forceFill(array_merge([
             'status' => StockImportStatus::Completed,
             'completed_at' => Date::now(),
-        ])->save();
+        ], $extraAttributes))->save();
     }
 }

@@ -9,6 +9,8 @@ use App\Domain\Stocks\Jobs\ProcessStockImportChunk;
 use App\Domain\Stocks\Models\Company;
 use App\Domain\Stocks\Models\StockImport;
 use App\Domain\Stocks\Models\StockPrice;
+use App\Domain\Stocks\Support\StockImportFileResolver;
+use App\Domain\Stocks\Support\StockImportRowSanitizer;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Date;
@@ -65,7 +67,10 @@ it('splits excel rows into chunk jobs', function (): void {
         'processed_rows' => 0,
     ]);
 
-    new PrepareStockImport($import->id)->handle();
+    new PrepareStockImport($import->id)->handle(
+        app(StockImportFileResolver::class),
+        app(StockImportRowSanitizer::class),
+    );
 
     Bus::assertBatched(function ($pendingBatch) {
         return $pendingBatch->jobs->count() === 1
