@@ -45,7 +45,36 @@ final class ProcessStockImportChunk implements ShouldQueue
             return;
         }
 
-        $payload = array_map(function (array $row): array {
+        $payload = $this->buildPayload();
+        $this->insertPrices($payload);
+        $this->touchCompany();
+        $this->incrementProcessedRows($payload);
+    }
+
+    public function touchCompany(): void
+    {
+        Company::query()
+            ->whereKey($this->companyId)
+            ->update(['updated_at' => Date::now()]);
+    }
+
+    public function incrementProcessedRows(array $payload): void
+    {
+        StockImport::query()->whereKey($this->importId)->increment('processed_rows', count($payload));
+    }
+
+    public function insertPrices(array $payload): void
+    {
+        StockPrice::query()->upsert(
+            values  : $payload,
+            uniqueBy: ['company_id', 'traded_on'],
+            update  : ['price']
+        );
+    }
+
+    public function buildPayload(): array
+    {
+        return array_map(function (array $row): array {
             $price = Price::fromString($row['price']);
 
             return [
@@ -54,18 +83,5 @@ final class ProcessStockImportChunk implements ShouldQueue
                 'price' => $price->toMinor(),
             ];
         }, $this->rows);
-
-        StockPrice::query()->upsert(
-            values: $payload,
-            uniqueBy: ['company_id', 'traded_on'],
-            update: ['price']
-        );
-
-        // Update company updated_at to invalidate cache key for stock performance summary
-        Company::query()
-            ->whereKey($this->companyId)
-            ->update(['updated_at' => Date::now()]);
-
-        StockImport::query()->whereKey($this->importId)->increment('processed_rows', count($payload));
     }
 }
